@@ -6,5 +6,10 @@ f.block do
             :description => 'Alternate path, relative to workspace root, to Vagrantfile (<em>only needed if the Vagrantfile is not in the root directory</em>)') do
         f.textbox
     end
+    f.entry(:title => 'Provider',
+            :field => 'provider',
+            :description => 'Vagrant 1.1+ provider to use. Default is virtualbox.') do
+        f.textbox
+    end
 end
 %>

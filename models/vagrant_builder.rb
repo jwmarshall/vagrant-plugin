@@ -10,21 +10,36 @@ module Vagrant
     def perform(build, launcher, listener)
       # This should be set by the VagrantWrapper
       @vagrant = build.env[:vagrant]
+      @provider = build.env[:vagrant_provider]
 
       if @vagrant.nil?
         build.halt "OH CRAP! I don't seem to have a Vagrant instance!"
       end
 
-      if @vagrant.multivm?
+      if multivms?
           perform_multi_vm(build, launcher, listener)
       else
           perform_single_vm(build, launcher, listener)
       end
     end
 
+    def multivms?
+      @vagrant.machine_names.length > 1
+    end
+
+    def vms
+      @vagrant.machine_names.map do |machine_name|
+        @vagrant.machine(machine_name, @provider)
+      end
+    end
+
+    def vm
+      @vagrant.machine(@vagrant.primary_machine_name, @provider)
+    end
+
     def perform_single_vm(build, launcher, listener)
-        unless @vagrant.primary_vm.state == :running
-            build.halt "Vagrant VM doesn't appear to be running!"
+        unless vm.state.id == :running
+            build.halt "Vagrant VM doesn't appear to be running! State is #{vm.state.id}"
         end
 
         listener.info("Running the command in Vagrant with \"#{vagrant_method.to_s}\":")
@@ -32,7 +47,7 @@ module Vagrant
             listener.info("+ #{line}")
         end
 
-        code = @vagrant.primary_vm.channel.send(vagrant_method, @command) do |type, data|
+        code = vm.communicate.send(vagrant_method, @command) do |type, data|
         # type is one of [:stdout, :stderr, :exit_status]
         # data is a string for stdout/stderr and an int for exit status
             if type == :stdout
@@ -47,17 +62,17 @@ module Vagrant
     end
 
     def perform_multi_vm(build, launcher, listener)
-        @vagrant.vms.each do |name, vm|
-            unless vm.state == :running
-                build.halt "Vagrant VM #{name} doesn't appear to be running!"
+        vms.each do |vm|
+            unless vm.state.id == :running
+                build.halt "Vagrant VM #{vm.name} doesn't appear to be running!"
             end
 
-            listener.info("Running the command in Vagrant on VM #{name} with \"#{vagrant_method.to_s}\":")
+            listener.info("Running the command in Vagrant on VM #{vm.name} with \"#{vagrant_method.to_s}\":")
             @command.split("\n").each do |line|
                 listener.info("+ #{line}")
             end
 
-            code = vm.channel.send(vagrant_method, @command) do |type, data|
+            code = vm.communicate.send(vagrant_method, @command) do |type, data|
             # type is one of [:stdout, :stderr, :exit_status]
             # data is a string for stdout/stderr and an int for exit status
                 if type == :stdout
@@ -108,6 +123,8 @@ module Vagrant
   class ProvisionBuilder < Jenkins::Tasks::Builder
     display_name 'Provision the Vagrant VM(s)'
 
+    include BaseBuilder
+
     def initialize(attrs)
     end
 
@@ -120,16 +137,16 @@ module Vagrant
         build.halt "OH CRAP! I don't seem to have a Vagrant instance"
       end
 
-      if @vagrant.multivm?
-          @vagrant.vms.each do |name, vm|
-              unless vm.state == :running
-                  build.halt "Vagrant VM #{name} doesn't appear to be running!"
+      if multivms?
+          vms.each do |vm|
+              unless vm.state.id == :running
+                  build.halt "Vagrant VM #{vm.name} doesn't appear to be running!"
               end
-              listener.info("Provisioning the Vagrant VM #{name}.. (this may take a while)")
-              @vagrant.cli('provision', "#{name}")
+              listener.info("Provisioning the Vagrant VM #{vm.name}.. (this may take a while)")
+              @vagrant.cli('provision', "#{vm.name}")
           end
       else
-        unless @vagrant.primary_vm.state == :running
+        unless vm.state.id == :running
             build.halt "Vagrant VM doesn't appear to be running!"
         end
         listener.info("Provisioning the Vagrant VM.. (this may take a while)")
