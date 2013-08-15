@@ -90,7 +90,7 @@ module Vagrant
         # up with a lot of virtualboxes running. So lets catch the exception and halt the build
         # destroying the box on halt.
         rescue => exception
-          listener.info("#{exception.backtrack}")
+          listener.info("#{exception.backtrace}")
           build.halt "ERROR: #{exception.message}"
         end
       end
