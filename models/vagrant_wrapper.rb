@@ -82,7 +82,17 @@ module Vagrant
       # VBoxManage, and it will fail if importing two boxes concurrently, so use
       # a file lock to make sure that doesn't happen.
       Lockfile.new(File.join(Dir.tmpdir, ".vagrant-jenkins-plugin.lock")) do
-        @vagrant.cli('up', '--provider', @provider.to_s, '--no-provision')
+        begin
+          @vagrant.cli('up')
+        # Since we're now provisioning on an up, catch exception if provision fails. Vagrant
+        # leaves the box running even if provision fails which is bad, as another box gets 
+        # created next time Jenkins runs the project. If provisioning is broke you will end 
+        # up with a lot of virtualboxes running. So lets catch the exception and halt the build
+        # destroying the box on halt.
+        rescue => exception
+          listener.info("#{exception.backtrack}")
+          build.halt "ERROR: #{exception.message}"
+        end
       end
       listener.info "Vagrant box is online, continuing with the build"
 
