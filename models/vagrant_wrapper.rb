@@ -91,6 +91,8 @@ module Vagrant
         # destroying the box on halt.
         rescue => exception
           listener.info("#{exception.backtrace}")
+          listener.info "**********Something went wrong! Destroying the Vagrant box************"
+          @vagrant.cli('destroy', '-f')
           build.halt "ERROR: #{exception.message}"
         end
       end
